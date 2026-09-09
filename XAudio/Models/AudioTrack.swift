@@ -1,6 +1,6 @@
 import Foundation
 
-struct AudioTrack: Identifiable, Hashable {
+struct AudioTrack: Identifiable, Hashable, Sendable {
     let url: URL
     let title: String
     let artist: String?
@@ -11,7 +11,7 @@ struct AudioTrack: Identifiable, Hashable {
     var id: URL { url }
 }
 
-enum PlaybackOrder: String, CaseIterable, Identifiable {
+enum PlaybackOrder: String, CaseIterable, Identifiable, Sendable {
     case sequential
     case shuffled
 
