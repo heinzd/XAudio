@@ -1,6 +1,7 @@
 import AVFoundation
 import Foundation
 import Observation
+import UIKit
 
 @MainActor
 @Observable
@@ -29,6 +30,7 @@ final class AudioLibraryModel {
 
     init() {
         savedPositions = Self.loadSavedPositions()
+        allowAutomaticScreenLock()
         configureAudioSession()
         timeObserver = player.addPeriodicTimeObserver(
             forInterval: CMTime(seconds: 0.5, preferredTimescale: 600),
@@ -132,6 +134,7 @@ final class AudioLibraryModel {
 
     func playPause() {
         guard let track = currentTrack else { return }
+        allowAutomaticScreenLock()
         if player.currentItem == nil || (player.currentItem?.asset as? AVURLAsset)?.url != track.url {
             player.replaceCurrentItem(with: AVPlayerItem(url: track.url))
         }
@@ -149,6 +152,7 @@ final class AudioLibraryModel {
         scrollToTrack: Bool = false
     ) {
         guard playlist.indices.contains(index) else { return }
+        allowAutomaticScreenLock()
 
         let track = playlist[index]
         let startPosition = resumeSavedPosition ? savedPosition(for: track) ?? 0 : 0
@@ -291,6 +295,10 @@ final class AudioLibraryModel {
         return enumerator.compactMap { $0 as? URL }
             .filter { $0.pathExtension.lowercased() == "mp3" }
             .sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
+    }
+
+    private func allowAutomaticScreenLock() {
+        UIApplication.shared.isIdleTimerDisabled = false
     }
 
     private func configureAudioSession() {
