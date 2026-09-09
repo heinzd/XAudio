@@ -16,6 +16,7 @@ final class AudioLibraryModel {
     var isPlaying = false
     var elapsed: TimeInterval = 0
     var errorMessage: String?
+    var navigationScrollRequest: URL?
 
     @ObservationIgnored private let player = AVPlayer()
     @ObservationIgnored private var timeObserver: Any?
@@ -106,7 +107,9 @@ final class AudioLibraryModel {
             for url in urls {
                 tracks.append(await AudioMetadataReader.track(at: url))
             }
-            if playbackOrder == .shuffled { tracks.shuffle() }
+            if playbackOrder == .shuffled {
+                tracks = Self.shuffledChangingOrder(tracks)
+            }
             playlist = tracks
             currentIndex = tracks.isEmpty ? nil : 0
             elapsed = 0
@@ -123,7 +126,7 @@ final class AudioLibraryModel {
         if order == .sequential {
             playlist.sort { $0.url.path.localizedStandardCompare($1.url.path) == .orderedAscending }
         } else {
-            playlist.shuffle()
+            playlist = Self.shuffledChangingOrder(playlist)
         }
         if let activeURL { currentIndex = playlist.firstIndex { $0.url == activeURL } }
     }
@@ -141,13 +144,16 @@ final class AudioLibraryModel {
         isPlaying.toggle()
     }
 
-    func play(at index: Int) {
+    func play(at index: Int, scrollToTrack: Bool = false) {
         guard playlist.indices.contains(index) else { return }
         currentIndex = index
         elapsed = 0
         player.replaceCurrentItem(with: AVPlayerItem(url: playlist[index].url))
         player.play()
         isPlaying = true
+        if scrollToTrack {
+            navigationScrollRequest = playlist[index].id
+        }
     }
 
     func previous() {
@@ -156,14 +162,14 @@ final class AudioLibraryModel {
             player.seek(to: .zero)
             elapsed = 0
         } else if currentIndex > 0 {
-            play(at: currentIndex - 1)
+            play(at: currentIndex - 1, scrollToTrack: true)
         }
     }
 
     func next() {
         guard let currentIndex else { return }
         if currentIndex + 1 < playlist.count {
-            play(at: currentIndex + 1)
+            play(at: currentIndex + 1, scrollToTrack: true)
         } else {
             player.pause()
             isPlaying = false
@@ -173,6 +179,19 @@ final class AudioLibraryModel {
     func seek(to seconds: TimeInterval) {
         player.seek(to: CMTime(seconds: seconds, preferredTimescale: 600))
         elapsed = seconds
+    }
+
+    nonisolated private static func shuffledChangingOrder(
+        _ tracks: [AudioTrack]
+    ) -> [AudioTrack] {
+        guard tracks.count > 1 else { return tracks }
+
+        var shuffled = tracks.shuffled()
+        if shuffled.map(\.id) == tracks.map(\.id) {
+            let first = shuffled.removeFirst()
+            shuffled.append(first)
+        }
+        return shuffled
     }
 
     nonisolated private static func mp3Files(recursivelyBelow folder: URL) -> [URL] {
