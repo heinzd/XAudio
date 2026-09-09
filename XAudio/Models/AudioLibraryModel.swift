@@ -22,15 +22,21 @@ final class AudioLibraryModel {
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var endObserver: NSObjectProtocol?
     @ObservationIgnored private var accessedRoot: URL?
+    @ObservationIgnored private var playbackSequence: [URL] = []
+    @ObservationIgnored private var savedPositions: [String: TimeInterval] = [:]
+    @ObservationIgnored private var lastPersistedSecond: Int = -1
+
+    private static let positionsDefaultsKey = "playbackPositions.json"
 
     init() {
+        savedPositions = Self.loadSavedPositions()
         configureAudioSession()
         timeObserver = player.addPeriodicTimeObserver(
             forInterval: CMTime(seconds: 0.5, preferredTimescale: 600),
             queue: .main
         ) { [weak self] time in
             Task { @MainActor in
-                self?.elapsed = time.seconds.isFinite ? time.seconds : 0
+                self?.updatePlaybackTime(time.seconds)
             }
         }
         endObserver = NotificationCenter.default.addObserver(
@@ -38,7 +44,7 @@ final class AudioLibraryModel {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in self?.next() }
+            Task { @MainActor in self?.trackDidFinish() }
         }
     }
 
@@ -101,16 +107,16 @@ final class AudioLibraryModel {
         errorMessage = nil
 
         Task {
-            let urls = Self.mp3Files(recursivelyBelow: source)
+            let urls = await Task.detached(priority: .userInitiated) {
+                Self.mp3Files(recursivelyBelow: source)
+            }.value
             var tracks: [AudioTrack] = []
             tracks.reserveCapacity(urls.count)
             for url in urls {
                 tracks.append(await AudioMetadataReader.track(at: url))
             }
-            if playbackOrder == .shuffled {
-                tracks = Self.shuffledChangingOrder(tracks)
-            }
             playlist = tracks
+            rebuildPlaybackSequence()
             currentIndex = tracks.isEmpty ? nil : 0
             elapsed = 0
             isPlaying = false
@@ -121,14 +127,8 @@ final class AudioLibraryModel {
 
     func changeOrder(to order: PlaybackOrder) {
         guard playbackOrder != order else { return }
-        let activeURL = currentTrack?.url
         playbackOrder = order
-        if order == .sequential {
-            playlist.sort { $0.url.path.localizedStandardCompare($1.url.path) == .orderedAscending }
-        } else {
-            playlist = Self.shuffledChangingOrder(playlist)
-        }
-        if let activeURL { currentIndex = playlist.firstIndex { $0.url == activeURL } }
+        rebuildPlaybackSequence()
     }
 
     func playPause() {
@@ -138,22 +138,46 @@ final class AudioLibraryModel {
         }
         if isPlaying {
             player.pause()
+            saveCurrentPosition()
         } else {
             player.play()
         }
         isPlaying.toggle()
     }
 
-    func play(at index: Int, scrollToTrack: Bool = false) {
+    func play(
+        at index: Int,
+        resumeSavedPosition: Bool = false,
+        scrollToTrack: Bool = false
+    ) {
         guard playlist.indices.contains(index) else { return }
+        saveCurrentPosition()
         currentIndex = index
-        elapsed = 0
-        player.replaceCurrentItem(with: AVPlayerItem(url: playlist[index].url))
+
+        let track = playlist[index]
+        let startPosition = resumeSavedPosition ? savedPosition(for: track) ?? 0 : 0
+        elapsed = startPosition
+        lastPersistedSecond = Int(startPosition)
+        player.replaceCurrentItem(with: AVPlayerItem(url: track.url))
+        if startPosition > 0 {
+            player.seek(to: CMTime(seconds: startPosition, preferredTimescale: 600))
+        }
         player.play()
         isPlaying = true
+
         if scrollToTrack {
-            navigationScrollRequest = playlist[index].id
+            navigationScrollRequest = track.id
         }
+    }
+
+    func continueCurrentTrack() {
+        guard let currentIndex, savedPosition(for: playlist[currentIndex]) != nil else { return }
+        play(at: currentIndex, resumeSavedPosition: true)
+    }
+
+    func savedPositionForCurrentTrack() -> TimeInterval? {
+        guard let currentTrack else { return nil }
+        return savedPosition(for: currentTrack)
     }
 
     func previous() {
@@ -161,16 +185,17 @@ final class AudioLibraryModel {
         if elapsed > 5 {
             player.seek(to: .zero)
             elapsed = 0
-        } else if currentIndex > 0 {
-            play(at: currentIndex - 1, scrollToTrack: true)
+        } else if let targetIndex = adjacentPlaylistIndex(offset: -1) {
+            play(at: targetIndex, scrollToTrack: true)
         }
     }
 
     func next() {
         guard let currentIndex else { return }
-        if currentIndex + 1 < playlist.count {
-            play(at: currentIndex + 1, scrollToTrack: true)
+        if let targetIndex = adjacentPlaylistIndex(offset: 1) {
+            play(at: targetIndex, scrollToTrack: true)
         } else {
+            saveCurrentPosition()
             player.pause()
             isPlaying = false
         }
@@ -181,13 +206,85 @@ final class AudioLibraryModel {
         elapsed = seconds
     }
 
-    nonisolated private static func shuffledChangingOrder(
-        _ tracks: [AudioTrack]
-    ) -> [AudioTrack] {
-        guard tracks.count > 1 else { return tracks }
+    private func rebuildPlaybackSequence() {
+        let sequential = playlist.map(\.url)
+        playbackSequence = playbackOrder == .sequential
+            ? sequential
+            : Self.shuffledChangingOrder(sequential)
+    }
 
-        var shuffled = tracks.shuffled()
-        if shuffled.map(\.id) == tracks.map(\.id) {
+    private func adjacentPlaylistIndex(offset: Int) -> Int? {
+        guard
+            let currentURL = currentTrack?.url,
+            let sequenceIndex = playbackSequence.firstIndex(of: currentURL)
+        else { return nil }
+
+        let targetSequenceIndex = sequenceIndex + offset
+        guard playbackSequence.indices.contains(targetSequenceIndex) else { return nil }
+        let targetURL = playbackSequence[targetSequenceIndex]
+        return playlist.firstIndex { $0.url == targetURL }
+    }
+
+    private func updatePlaybackTime(_ seconds: TimeInterval) {
+        guard seconds.isFinite else { return }
+        elapsed = seconds
+
+        let wholeSecond = Int(seconds)
+        if isPlaying, wholeSecond / 5 != lastPersistedSecond / 5 {
+            lastPersistedSecond = wholeSecond
+            saveCurrentPosition()
+        }
+    }
+
+    private func trackDidFinish() {
+        if let currentTrack {
+            savedPositions.removeValue(forKey: positionKey(for: currentTrack))
+            persistSavedPositions()
+        }
+        elapsed = 0
+        next()
+    }
+
+    private func savedPosition(for track: AudioTrack) -> TimeInterval? {
+        guard let position = savedPositions[positionKey(for: track)], position > 1 else {
+            return nil
+        }
+        if track.duration > 0, position >= track.duration - 2 {
+            return nil
+        }
+        return position
+    }
+
+    private func saveCurrentPosition() {
+        guard let currentTrack, elapsed > 1 else { return }
+        savedPositions[positionKey(for: currentTrack)] = elapsed
+        persistSavedPositions()
+    }
+
+    private func positionKey(for track: AudioTrack) -> String {
+        track.url.path
+    }
+
+    private func persistSavedPositions() {
+        guard let data = try? JSONEncoder().encode(savedPositions) else { return }
+        UserDefaults.standard.set(data, forKey: Self.positionsDefaultsKey)
+    }
+
+    private static func loadSavedPositions() -> [String: TimeInterval] {
+        guard
+            let data = UserDefaults.standard.data(forKey: positionsDefaultsKey),
+            let positions = try? JSONDecoder().decode([String: TimeInterval].self, from: data)
+        else { return [:] }
+        return positions
+    }
+
+    nonisolated private static func shuffledChangingOrder<Element: Equatable>(
+        _ elements: [Element]
+    ) -> [Element] {
+        guard elements.count > 1 else { return elements }
+
+        var shuffled = elements.shuffled()
+        if shuffled == elements {
             let first = shuffled.removeFirst()
             shuffled.append(first)
         }
