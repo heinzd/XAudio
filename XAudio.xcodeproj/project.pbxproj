@@ -1,0 +1,68 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 77;
+	objects = {
+		11A000000000000000000001 = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = XAudio;
+			sourceTree = "<group>";
+		};
+		11A000000000000000000002 = {
+			isa = PBXGroup;
+			children = (
+				11A000000000000000000001,
+				11A000000000000000000003,
+			);
+			sourceTree = "<group>";
+		};
+		11A000000000000000000003 = {
+			isa = PBXGroup;
+			children = (11A00000000000000000000A,);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		11A000000000000000000004 = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 11A000000000000000000009;
+			buildPhases = (
+				11A000000000000000000005,
+				11A000000000000000000006,
+				11A000000000000000000007,
+			);
+			buildRules = ();
+			dependencies = ();
+			fileSystemSynchronizedGroups = (11A000000000000000000001,);
+			name = XAudio;
+			productName = XAudio;
+			productReference = 11A00000000000000000000A;
+			productType = "com.apple.product-type.application";
+		};
+		11A000000000000000000005 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		11A000000000000000000006 = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		11A000000000000000000007 = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		11A00000000000000000000A = { isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = XAudio.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		11A000000000000000000008 = {
+			isa = PBXProject;
+			attributes = { BuildIndependentTargetsInParallel = 1; LastSwiftUpdateCheck = 2600; LastUpgradeCheck = 2600; TargetAttributes = { 11A000000000000000000004 = { CreatedOnToolsVersion = 26.0; }; }; };
+			buildConfigurationList = 11A00000000000000000000B;
+			compatibilityVersion = "Xcode 16.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (en, Base, de);
+			mainGroup = 11A000000000000000000002;
+			productRefGroup = 11A000000000000000000003;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (11A000000000000000000004,);
+		};
+		11A00000000000000000000B = { isa = XCConfigurationList; buildConfigurations = (11A00000000000000000000C, 11A00000000000000000000D); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		11A000000000000000000009 = { isa = XCConfigurationList; buildConfigurations = (11A00000000000000000000E, 11A00000000000000000000F); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		11A00000000000000000000C = { isa = XCBuildConfiguration; buildSettings = { ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; COPY_PHASE_STRIP = NO; DEBUG_INFORMATION_FORMAT = dwarf; ENABLE_TESTABILITY = YES; GCC_C_LANGUAGE_STANDARD = gnu17; IPHONEOS_DEPLOYMENT_TARGET = 18.0; SDKROOT = iphoneos; SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; }; name = Debug; };
+		11A00000000000000000000D = { isa = XCBuildConfiguration; buildSettings = { ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym"; ENABLE_NS_ASSERTIONS = NO; GCC_C_LANGUAGE_STANDARD = gnu17; IPHONEOS_DEPLOYMENT_TARGET = 18.0; SDKROOT = iphoneos; SWIFT_COMPILATION_MODE = wholemodule; VALIDATE_PRODUCT = YES; }; name = Release; };
+		11A00000000000000000000E = { isa = XCBuildConfiguration; buildSettings = { ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_TEAM = 5Q5WS97PZ5; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES; INFOPLIST_KEY_UIBackgroundModes = audio; INFOPLIST_KEY_UILaunchScreen_Generation = YES; INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait; IPHONEOS_DEPLOYMENT_TARGET = 18.0; MARKETING_VERSION = 0.1; PRODUCT_BUNDLE_IDENTIFIER = de.heinzd.XAudio; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 6.0; TARGETED_DEVICE_FAMILY = 1; }; name = Debug; };
+		11A00000000000000000000F = { isa = XCBuildConfiguration; buildSettings = { ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_TEAM = 5Q5WS97PZ5; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES; INFOPLIST_KEY_UIBackgroundModes = audio; INFOPLIST_KEY_UILaunchScreen_Generation = YES; INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait; IPHONEOS_DEPLOYMENT_TARGET = 18.0; MARKETING_VERSION = 0.1; PRODUCT_BUNDLE_IDENTIFIER = de.heinzd.XAudio; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 6.0; TARGETED_DEVICE_FAMILY = 1; }; name = Release; };
+	};
+	rootObject = 11A000000000000000000008;
+}
