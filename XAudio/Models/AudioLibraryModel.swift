@@ -151,11 +151,14 @@ final class AudioLibraryModel {
         scrollToTrack: Bool = false
     ) {
         guard playlist.indices.contains(index) else { return }
-        saveCurrentPosition()
-        currentIndex = index
 
         let track = playlist[index]
         let startPosition = resumeSavedPosition ? savedPosition(for: track) ?? 0 : 0
+        let continuesCurrentTrack = resumeSavedPosition && currentTrack?.url == track.url
+        if !continuesCurrentTrack {
+            saveCurrentPosition()
+        }
+        currentIndex = index
         elapsed = startPosition
         lastPersistedSecond = Int(startPosition)
         player.replaceCurrentItem(with: AVPlayerItem(url: track.url))
