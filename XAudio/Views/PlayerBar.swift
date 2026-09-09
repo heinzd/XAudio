@@ -42,6 +42,9 @@ struct PlayerBar: View {
                     } label: {
                         Image(systemName: "play.rectangle.fill")
                     }
+                    .foregroundStyle(
+                        model.savedPositionForCurrentTrack() == nil ? Color.gray : Color.blue
+                    )
                     .disabled(model.savedPositionForCurrentTrack() == nil)
                     .accessibilityLabel("Zur gespeicherten Position springen")
                 }
