@@ -49,6 +49,20 @@ struct PlayerBar: View {
                     value: Binding(get: { model.elapsed }, set: { model.seek(to: $0) }),
                     in: 0...max(track.duration, 1)
                 )
+
+                HStack {
+                    Button("Fortsetzen", systemImage: "arrow.counterclockwise") {
+                        model.continueCurrentTrack()
+                    }
+                    .disabled(model.savedPositionForCurrentTrack() == nil)
+
+                    if let savedPosition = model.savedPositionForCurrentTrack() {
+                        Text("bei \(formatted(savedPosition))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                }
             }
             .padding()
             .background(.regularMaterial)
@@ -58,6 +72,11 @@ struct PlayerBar: View {
     private var positionText: String {
         guard let index = model.currentIndex else { return "" }
         return "\(index + 1) von \(model.playlist.count)"
+    }
+
+    private func formatted(_ seconds: TimeInterval) -> String {
+        let total = max(0, Int(seconds))
+        return String(format: "%d:%02d:%02d", total / 3600, (total / 60) % 60, total % 60)
     }
 }
 
