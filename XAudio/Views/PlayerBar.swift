@@ -27,6 +27,27 @@ struct PlayerBar: View {
         if let track = model.currentTrack {
             VStack(spacing: 8) {
                 HStack(spacing: 12) {
+                    Spacer()
+
+                    Button {
+                        model.saveCurrentPositionManually()
+                    } label: {
+                        Image(systemName: "play.rectangle")
+                    }
+                    .disabled(!model.canSaveCurrentPosition)
+                    .accessibilityLabel("Position speichern")
+
+                    Button {
+                        model.jumpToSavedPosition()
+                    } label: {
+                        Image(systemName: "play.rectangle.fill")
+                    }
+                    .disabled(model.savedPositionForCurrentTrack() == nil)
+                    .accessibilityLabel("Zur gespeicherten Position springen")
+                }
+                .font(.title3)
+
+                HStack(spacing: 12) {
                     ArtworkView(data: track.artworkData, size: 56)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(track.title).font(.headline).lineLimit(2)
@@ -50,17 +71,6 @@ struct PlayerBar: View {
                     in: 0...max(track.duration, 1)
                 )
 
-                if let savedPosition = model.savedPositionForCurrentTrack() {
-                    HStack {
-                        Button("Fortsetzen", systemImage: "arrow.counterclockwise") {
-                            model.continueCurrentTrack()
-                        }
-                        Text("bei \(formatted(savedPosition))")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                    }
-                }
             }
             .padding()
             .background(.regularMaterial)
@@ -70,11 +80,5 @@ struct PlayerBar: View {
     private var positionText: String {
         guard let index = model.currentIndex else { return "" }
         return "\(index + 1) von \(model.playlist.count)"
-    }
-
-    private func formatted(_ seconds: TimeInterval) -> String {
-        let total = max(0, Int(seconds))
-        return String(format: "%d:%02d:%02d", total / 3600, (total / 60) % 60, total % 60)
-    }
-}
+    }}
 
