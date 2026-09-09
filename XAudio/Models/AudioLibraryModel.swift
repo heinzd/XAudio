@@ -61,6 +61,7 @@ final class AudioLibraryModel {
         _ = url.startAccessingSecurityScopedResource()
         accessedRoot = url
         rootFolder = url
+        loadPositionsFromRootFolder()
         currentFolder = url
         selectedFolder = nil
         refreshFolders()
@@ -245,9 +246,20 @@ final class AudioLibraryModel {
     }
 
     private func savedPosition(for track: AudioTrack) -> TimeInterval? {
-        guard let position = savedPositions[positionKey(for: track)], position > 1 else {
-            return nil
+        let stableKey = positionKey(for: track)
+        var position = savedPositions[stableKey]
+
+        if position == nil {
+            let relativeSuffix = "/" + relativePath(for: track.url)
+            if let legacyEntry = savedPositions.first(where: { $0.key.hasSuffix(relativeSuffix) }) {
+                position = legacyEntry.value
+                savedPositions[stableKey] = legacyEntry.value
+                savedPositions.removeValue(forKey: legacyEntry.key)
+                persistSavedPositions()
+            }
         }
+
+        guard let position, position > 1 else { return nil }
         if track.duration > 0, position >= track.duration - 2 {
             return nil
         }
@@ -255,12 +267,43 @@ final class AudioLibraryModel {
     }
 
     private func positionKey(for track: AudioTrack) -> String {
-        track.url.path
+        let rootName = rootFolder?.lastPathComponent ?? "AudioLibrary"
+        return rootName + "/" + relativePath(for: track.url)
+    }
+
+    private func relativePath(for url: URL) -> String {
+        guard let rootFolder else { return url.lastPathComponent }
+
+        let rootComponents = rootFolder.standardizedFileURL.pathComponents
+        let fileComponents = url.standardizedFileURL.pathComponents
+        guard
+            fileComponents.count >= rootComponents.count,
+            Array(fileComponents.prefix(rootComponents.count)) == rootComponents
+        else { return url.lastPathComponent }
+
+        return fileComponents.dropFirst(rootComponents.count).joined(separator: "/")
+    }
+
+    private var positionsFileURL: URL? {
+        rootFolder?.appendingPathComponent(".xaudio-positions.json", isDirectory: false)
+    }
+
+    private func loadPositionsFromRootFolder() {
+        guard
+            let positionsFileURL,
+            let data = try? Data(contentsOf: positionsFileURL),
+            let positions = try? JSONDecoder().decode([String: TimeInterval].self, from: data)
+        else { return }
+
+        savedPositions.merge(positions) { _, rootValue in rootValue }
     }
 
     private func persistSavedPositions() {
         guard let data = try? JSONEncoder().encode(savedPositions) else { return }
         UserDefaults.standard.set(data, forKey: Self.positionsDefaultsKey)
+        if let positionsFileURL {
+            try? data.write(to: positionsFileURL, options: .atomic)
+        }
     }
 
     private static func loadSavedPositions() -> [String: TimeInterval] {
