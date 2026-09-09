@@ -24,7 +24,7 @@ final class AudioLibraryModel {
     @ObservationIgnored private var endObserver: NSObjectProtocol?
     @ObservationIgnored private var accessedRoot: URL?
     @ObservationIgnored private var playbackSequence: [URL] = []
-    @ObservationIgnored private var savedPositions: [String: TimeInterval] = [:]
+    private var savedPositions: [String: TimeInterval] = [:]
 
     private static let positionsDefaultsKey = "playbackPositions.json"
 
@@ -189,6 +189,10 @@ final class AudioLibraryModel {
     func savedPositionForCurrentTrack() -> TimeInterval? {
         guard let currentTrack else { return nil }
         return savedPosition(for: currentTrack)
+    }
+
+    var hasSavedPositionForCurrentTrack: Bool {
+        savedPositionForCurrentTrack() != nil
     }
 
     func previous() {
