@@ -24,8 +24,6 @@ final class AudioLibraryModel {
     @ObservationIgnored private var accessedRoot: URL?
     @ObservationIgnored private var playbackSequence: [URL] = []
     @ObservationIgnored private var savedPositions: [String: TimeInterval] = [:]
-    @ObservationIgnored private var lastPersistedSecond: Int = -1
-    @ObservationIgnored private var mayUpdateCurrentSavedPosition = false
 
     private static let positionsDefaultsKey = "playbackPositions.json"
 
@@ -119,7 +117,6 @@ final class AudioLibraryModel {
             playlist = tracks
             rebuildPlaybackSequence()
             currentIndex = tracks.isEmpty ? nil : 0
-            mayUpdateCurrentSavedPosition = false
             elapsed = 0
             isPlaying = false
             player.replaceCurrentItem(with: nil)
@@ -136,12 +133,10 @@ final class AudioLibraryModel {
     func playPause() {
         guard let track = currentTrack else { return }
         if player.currentItem == nil || (player.currentItem?.asset as? AVURLAsset)?.url != track.url {
-            mayUpdateCurrentSavedPosition = savedPosition(for: track) == nil
             player.replaceCurrentItem(with: AVPlayerItem(url: track.url))
         }
         if isPlaying {
             player.pause()
-            saveCurrentPosition()
         } else {
             player.play()
         }
@@ -156,16 +151,9 @@ final class AudioLibraryModel {
         guard playlist.indices.contains(index) else { return }
 
         let track = playlist[index]
-        let existingPosition = savedPosition(for: track)
-        let startPosition = resumeSavedPosition ? existingPosition ?? 0 : 0
-        let continuesCurrentTrack = resumeSavedPosition && currentTrack?.url == track.url
-        if !continuesCurrentTrack {
-            saveCurrentPosition()
-        }
+        let startPosition = resumeSavedPosition ? savedPosition(for: track) ?? 0 : 0
         currentIndex = index
-        mayUpdateCurrentSavedPosition = resumeSavedPosition || existingPosition == nil
         elapsed = startPosition
-        lastPersistedSecond = Int(startPosition)
         player.replaceCurrentItem(with: AVPlayerItem(url: track.url))
         if startPosition > 0 {
             player.seek(to: CMTime(seconds: startPosition, preferredTimescale: 600))
@@ -178,9 +166,19 @@ final class AudioLibraryModel {
         }
     }
 
-    func continueCurrentTrack() {
+    func saveCurrentPositionManually() {
+        guard let currentTrack, elapsed > 1 else { return }
+        savedPositions[positionKey(for: currentTrack)] = elapsed
+        persistSavedPositions()
+    }
+
+    func jumpToSavedPosition() {
         guard let currentIndex, savedPosition(for: playlist[currentIndex]) != nil else { return }
         play(at: currentIndex, resumeSavedPosition: true)
+    }
+
+    var canSaveCurrentPosition: Bool {
+        currentTrack != nil && elapsed > 1
     }
 
     func savedPositionForCurrentTrack() -> TimeInterval? {
@@ -203,7 +201,6 @@ final class AudioLibraryModel {
         if let targetIndex = adjacentPlaylistIndex(offset: 1) {
             play(at: targetIndex, scrollToTrack: true)
         } else {
-            saveCurrentPosition()
             player.pause()
             isPlaying = false
         }
@@ -236,19 +233,9 @@ final class AudioLibraryModel {
     private func updatePlaybackTime(_ seconds: TimeInterval) {
         guard seconds.isFinite else { return }
         elapsed = seconds
-
-        let wholeSecond = Int(seconds)
-        if isPlaying, wholeSecond / 5 != lastPersistedSecond / 5 {
-            lastPersistedSecond = wholeSecond
-            saveCurrentPosition()
-        }
     }
 
     private func trackDidFinish() {
-        if mayUpdateCurrentSavedPosition, let currentTrack {
-            savedPositions.removeValue(forKey: positionKey(for: currentTrack))
-            persistSavedPositions()
-        }
         elapsed = 0
         next()
     }
@@ -261,12 +248,6 @@ final class AudioLibraryModel {
             return nil
         }
         return position
-    }
-
-    private func saveCurrentPosition() {
-        guard mayUpdateCurrentSavedPosition, let currentTrack, elapsed > 1 else { return }
-        savedPositions[positionKey(for: currentTrack)] = elapsed
-        persistSavedPositions()
     }
 
     private func positionKey(for track: AudioTrack) -> String {
