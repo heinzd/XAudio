@@ -50,18 +50,16 @@ struct PlayerBar: View {
                     in: 0...max(track.duration, 1)
                 )
 
-                HStack {
-                    Button("Fortsetzen", systemImage: "arrow.counterclockwise") {
-                        model.continueCurrentTrack()
-                    }
-                    .disabled(model.savedPositionForCurrentTrack() == nil)
-
-                    if let savedPosition = model.savedPositionForCurrentTrack() {
+                if let savedPosition = model.savedPositionForCurrentTrack() {
+                    HStack {
+                        Button("Fortsetzen", systemImage: "arrow.counterclockwise") {
+                            model.continueCurrentTrack()
+                        }
                         Text("bei \(formatted(savedPosition))")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                        Spacer()
                     }
-                    Spacer()
                 }
             }
             .padding()
