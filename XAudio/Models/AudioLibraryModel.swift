@@ -41,12 +41,6 @@ final class AudioLibraryModel {
         }
     }
 
-    deinit {
-        if let timeObserver { player.removeTimeObserver(timeObserver) }
-        if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
-        accessedRoot?.stopAccessingSecurityScopedResource()
-    }
-
     var currentTrack: AudioTrack? {
         guard let currentIndex, playlist.indices.contains(currentIndex) else { return nil }
         return playlist[currentIndex]
