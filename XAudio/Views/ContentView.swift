@@ -56,7 +56,8 @@ struct ContentView: View {
     }
 
     private var browser: some View {
-        List {
+        ScrollViewReader { proxy in
+            List {
             Section {
                 if model.currentFolder != model.rootFolder {
                     Button {
@@ -138,6 +139,14 @@ struct ContentView: View {
                         }
                     }
                     .buttonStyle(.plain)
+                    .id(track.id)
+                }
+            }
+            }
+            .onChange(of: model.navigationScrollRequest) { _, trackID in
+                guard let trackID else { return }
+                withAnimation {
+                    proxy.scrollTo(trackID, anchor: .center)
                 }
             }
         }
