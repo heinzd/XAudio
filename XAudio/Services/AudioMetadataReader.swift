@@ -13,6 +13,7 @@ enum AudioMetadataReader {
         case conventionalCoverName
         case exactDirectoryNameWithoutYear
         case normalizedDirectoryNameWithoutYear
+        case firstNonBackImage
     }
 
     static func track(at url: URL) async -> AudioTrack {
@@ -129,6 +130,14 @@ enum AudioMetadataReader {
                 match = imageFiles.first {
                     normalizedCoverName(baseName(of: $0))
                         .caseInsensitiveCompare(normalizedExpected) == .orderedSame
+                }
+
+            case .firstNonBackImage:
+                match = imageFiles.first {
+                    !baseName(of: $0)
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                        .lowercased()
+                        .hasSuffix("back")
                 }
             }
 
