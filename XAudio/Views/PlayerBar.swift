@@ -23,6 +23,26 @@ struct ArtworkView: View {
     }
 }
 
+struct FavoriteButton: View {
+    @Bindable var model: AudioLibraryModel
+    let track: AudioTrack
+
+    var body: some View {
+        Button {
+            model.toggleFavorite(track)
+        } label: {
+            Image(systemName: model.isFavorite(track) ? "star.fill" : "star")
+                .foregroundStyle(model.isFavorite(track) ? Color.yellow : Color.secondary)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(
+            model.isFavorite(track)
+                ? "Aus Favoriten entfernen"
+                : "Zu Favoriten hinzufügen"
+        )
+    }
+}
+
 struct PlayerBar: View {
     @Bindable var model: AudioLibraryModel
 
@@ -68,6 +88,7 @@ struct PlayerBar: View {
                         Text(positionText).font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
+                    FavoriteButton(model: model, track: track)
                     Button(action: model.previous) {
                         Image(systemName: "backward.fill")
                     }
@@ -117,6 +138,8 @@ struct LandscapePlayerView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             HStack(spacing: 14) {
                                 Spacer()
+
+                                FavoriteButton(model: model, track: track)
 
                                 Button {
                                     model.saveCurrentPositionManually()
