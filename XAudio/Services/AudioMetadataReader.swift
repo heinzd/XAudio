@@ -11,7 +11,8 @@ enum AudioMetadataReader {
             let title = await stringValue(for: .commonIdentifierTitle, in: metadata)
             let artist = await stringValue(for: .commonIdentifierArtist, in: metadata)
             let album = await stringValue(for: .commonIdentifierAlbumName, in: metadata)
-            let artwork = await dataValue(for: .commonIdentifierArtwork, in: metadata)
+            let embeddedArtwork = await dataValue(for: .commonIdentifierArtwork, in: metadata)
+            let artwork = embeddedArtwork ?? folderArtworkData(beside: url)
 
             return AudioTrack(
                 url: url,
@@ -27,7 +28,7 @@ enum AudioMetadataReader {
                 title: url.deletingPathExtension().lastPathComponent,
                 artist: nil,
                 album: nil,
-                artworkData: nil,
+                artworkData: folderArtworkData(beside: url),
                 duration: 0
             )
         }
@@ -53,6 +54,34 @@ enum AudioMetadataReader {
             filteredByIdentifier: identifier
         ).first else { return nil }
         return try? await item.load(.dataValue)
+    }
+
+
+    private static func folderArtworkData(beside audioURL: URL) -> Data? {
+        let folder = audioURL.deletingLastPathComponent()
+        let supportedExtensions = ["jpg", "jpeg", "png", "heic", "heif", "webp"]
+
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: folder,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else { return nil }
+
+        let coverURL = files
+            .filter {
+                $0.deletingPathExtension().lastPathComponent
+                    .caseInsensitiveCompare("cover") == .orderedSame
+            }
+            .filter { supportedExtensions.contains($0.pathExtension.lowercased()) }
+            .sorted {
+                let left = supportedExtensions.firstIndex(of: $0.pathExtension.lowercased()) ?? .max
+                let right = supportedExtensions.firstIndex(of: $1.pathExtension.lowercased()) ?? .max
+                return left < right
+            }
+            .first
+
+        guard let coverURL else { return nil }
+        return try? Data(contentsOf: coverURL)
     }
 }
 
