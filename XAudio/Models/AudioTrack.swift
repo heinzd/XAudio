@@ -5,6 +5,7 @@ struct AudioTrack: Identifiable, Hashable, Sendable {
     let title: String
     let artist: String?
     let album: String?
+    let year: String?
     let artworkData: Data?
     let duration: TimeInterval
 
