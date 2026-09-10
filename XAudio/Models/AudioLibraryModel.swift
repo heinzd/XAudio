@@ -16,7 +16,7 @@ private enum NowPlayingArtworkFactory {
 final class AudioLibraryModel {
     var rootFolder: URL?
     var currentFolder: URL?
-    var selectedFolder: URL?
+    var selectedFolders: Set<URL> = []
     var folders: [URL] = []
     var playlist: [AudioTrack] = []
     var currentIndex: Int?
@@ -66,7 +66,14 @@ final class AudioLibraryModel {
         return playlist[currentIndex]
     }
 
-    var playlistSource: URL? { selectedFolder ?? currentFolder }
+    var playlistSources: [URL] {
+        if selectedFolders.isEmpty {
+            return currentFolder.map { [$0] } ?? []
+        }
+        return selectedFolders.sorted {
+            $0.path.localizedStandardCompare($1.path) == .orderedAscending
+        }
+    }
 
     func openRoot(_ url: URL) {
         accessedRoot?.stopAccessingSecurityScopedResource()
@@ -76,13 +83,12 @@ final class AudioLibraryModel {
         persistRootBookmark(url)
         loadPositionsFromRootFolder()
         currentFolder = url
-        selectedFolder = nil
+        selectedFolders.removeAll()
         refreshFolders()
     }
 
     func showFolder(_ url: URL) {
         currentFolder = url
-        selectedFolder = nil
         refreshFolders()
     }
 
@@ -94,7 +100,11 @@ final class AudioLibraryModel {
     }
 
     func toggleSelection(_ url: URL) {
-        selectedFolder = selectedFolder == url ? nil : url
+        if selectedFolders.contains(url) {
+            selectedFolders.remove(url)
+        } else {
+            selectedFolders.insert(url)
+        }
     }
 
     func refreshFolders() {
@@ -117,13 +127,17 @@ final class AudioLibraryModel {
     }
 
     func buildPlaylist() {
-        guard let source = playlistSource else { return }
+        let sources = playlistSources
+        guard !sources.isEmpty else { return }
         isBuildingPlaylist = true
         errorMessage = nil
 
         Task { @MainActor in
             let urls = await Task.detached(priority: .userInitiated) {
-                Self.mp3Files(recursivelyBelow: source)
+                let allURLs = sources.flatMap { Self.mp3Files(recursivelyBelow: $0) }
+                return Array(Set(allURLs)).sorted {
+                    $0.path.localizedStandardCompare($1.path) == .orderedAscending
+                }
             }.value
             var tracks: [AudioTrack] = []
             tracks.reserveCapacity(urls.count)
