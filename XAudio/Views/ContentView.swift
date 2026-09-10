@@ -5,7 +5,6 @@ struct ContentView: View {
     @Bindable var model: AudioLibraryModel
     @State private var showsFolderImporter = false
     @State private var playlistPresentation: PlaylistPresentation?
-    @State private var playlistSourcesSnapshot: [URL] = []
 
     var body: some View {
         NavigationStack {
@@ -44,11 +43,7 @@ struct ContentView: View {
                 }
             }
             .fullScreenCover(item: $playlistPresentation) { presentation in
-                PlaylistView(
-                    model: model,
-                    presentation: presentation,
-                    folderSources: playlistSourcesSnapshot
-                )
+                PlaylistView(model: model, presentation: presentation)
             }
             .alert("Fehler", isPresented: Binding(
                 get: { model.errorMessage != nil },
@@ -127,12 +122,12 @@ struct ContentView: View {
             }
 
             Button {
-                playlistSourcesSnapshot = model.selectedFolders.isEmpty
+                let sources = model.selectedFolders.isEmpty
                     ? model.currentFolder.map { [$0] } ?? []
                     : model.selectedFolders.sorted {
                         $0.path.localizedStandardCompare($1.path) == .orderedAscending
                     }
-                playlistPresentation = .folders
+                playlistPresentation = .folders(sources)
             } label: {
                 Label("Abspielliste erstellen", systemImage: "music.note.list")
                     .frame(maxWidth: .infinity)
@@ -143,17 +138,27 @@ struct ContentView: View {
     }
 }
 
-private enum PlaylistPresentation: String, Identifiable {
-    case folders
+private enum PlaylistPresentation: Identifiable {
+    case folders([URL])
     case favorites
-    var id: String { rawValue }
+
+    var id: String {
+        switch self {
+        case .folders: "folders"
+        case .favorites: "favorites"
+        }
+    }
+
+    var isFavorites: Bool {
+        if case .favorites = self { return true }
+        return false
+    }
 }
 
 private struct PlaylistView: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var model: AudioLibraryModel
     let presentation: PlaylistPresentation
-    let folderSources: [URL]
 
     var body: some View {
         GeometryReader { geometry in
@@ -164,10 +169,11 @@ private struct PlaylistView: View {
             }
         }
         .task(id: presentation.id) {
-            if presentation == .favorites {
+            switch presentation {
+            case .folders(let sources):
+                model.openSelectedPlaylist(from: sources)
+            case .favorites:
                 model.openFavorites()
-            } else {
-                model.openSelectedPlaylist(from: folderSources)
             }
         }
         .onDisappear {
@@ -183,8 +189,8 @@ private struct PlaylistView: View {
                         ProgressView("MP3-Dateien werden gelesen …")
                     } else if model.playlist.isEmpty {
                         ContentUnavailableView(
-                            presentation == .favorites ? "Keine Favoriten" : "Keine MP3-Dateien",
-                            systemImage: presentation == .favorites ? "star" : "music.note.list"
+                            presentation.isFavorites ? "Keine Favoriten" : "Keine MP3-Dateien",
+                            systemImage: presentation.isFavorites ? "star" : "music.note.list"
                         )
                     } else {
                         List(Array(model.playlist.enumerated()), id: \.element.id) { index, track in
@@ -231,7 +237,7 @@ private struct PlaylistView: View {
                     withAnimation { proxy.scrollTo(trackID, anchor: .center) }
                 }
             }
-            .navigationTitle(presentation == .favorites ? "Favoriten" : "Abspielliste")
+            .navigationTitle(presentation.isFavorites ? "Favoriten" : "Abspielliste")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
