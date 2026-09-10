@@ -129,7 +129,6 @@ final class AudioLibraryModel {
             elapsed = 0
             isPlaying = false
             player.replaceCurrentItem(with: nil)
-            updateNowPlayingInfo()
             isBuildingPlaylist = false
         }
     }
