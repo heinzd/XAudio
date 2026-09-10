@@ -6,9 +6,14 @@ struct ContentView: View {
     @State private var showsFolderImporter = false
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if model.rootFolder == nil {
+        GeometryReader { geometry in
+            let isLandscape = geometry.size.width > geometry.size.height
+
+            NavigationStack {
+                Group {
+                    if isLandscape {
+                        LandscapePlayerView(model: model)
+                    } else if model.rootFolder == nil {
                     ContentUnavailableView {
                         Label("Kein Hörbuchordner", systemImage: "folder.badge.plus")
                     } description: {
@@ -23,14 +28,19 @@ struct ContentView: View {
             }
             .navigationTitle("XAudio")
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Stammordner", systemImage: "folder.badge.gearshape") {
-                        showsFolderImporter = true
+                if !isLandscape {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Stammordner", systemImage: "folder.badge.gearshape") {
+                            showsFolderImporter = true
+                        }
                     }
                 }
             }
+            .toolbar(isLandscape ? .hidden : .visible, for: .navigationBar)
             .safeAreaInset(edge: .bottom) {
-                if model.currentTrack != nil { PlayerBar(model: model) }
+                if !isLandscape, model.currentTrack != nil {
+                    PlayerBar(model: model)
+                }
             }
             .fileImporter(
                 isPresented: $showsFolderImporter,
@@ -51,6 +61,7 @@ struct ContentView: View {
                 Button("OK") { model.errorMessage = nil }
             } message: {
                 Text(model.errorMessage ?? "Unbekannter Fehler")
+            }
             }
         }
     }
