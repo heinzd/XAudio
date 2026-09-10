@@ -208,6 +208,8 @@ final class AudioLibraryModel {
         if favoritePaths.contains(path) {
             favoritePaths.remove(path)
             if playlistIsFavorites {
+                let removedIndex = playlist.firstIndex { $0.url == track.url }
+                let previousCurrentIndex = currentIndex
                 let wasCurrent = currentTrack?.url == track.url
                 playlist.removeAll { $0.url == track.url }
                 if wasCurrent {
@@ -216,7 +218,13 @@ final class AudioLibraryModel {
                     isPlaying = false
                     elapsed = 0
                 }
-                currentIndex = playlist.isEmpty ? nil : min(currentIndex ?? 0, playlist.count - 1)
+                if playlist.isEmpty {
+                    currentIndex = nil
+                } else if let removedIndex, let previousCurrentIndex {
+                    currentIndex = removedIndex < previousCurrentIndex
+                        ? previousCurrentIndex - 1
+                        : min(previousCurrentIndex, playlist.count - 1)
+                }
                 playlistSourceSignature = "favorites\n" + favoritePaths.sorted().joined(separator: "\n")
                 rebuildPlaybackSequence()
             }
