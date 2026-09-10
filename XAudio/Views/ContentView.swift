@@ -80,7 +80,7 @@ struct ContentView: View {
                         Button {
                             model.toggleSelection(folder)
                         } label: {
-                            Image(systemName: model.selectedFolder == folder ? "checkmark.circle.fill" : "circle")
+                            Image(systemName: model.selectedFolders.contains(folder) ? "checkmark.circle.fill" : "circle")
                                 .font(.title3)
                         }
                         .buttonStyle(.plain)
@@ -90,8 +90,10 @@ struct ContentView: View {
             } header: {
                 Text(model.currentFolder?.lastPathComponent ?? "Ordner")
             } footer: {
-                if let selected = model.selectedFolder {
-                    Text("Playlist ab: \(selected.lastPathComponent)")
+                if model.selectedFolders.count == 1, let selected = model.selectedFolders.first {
+                    Text("Playlist aus: \(selected.lastPathComponent)")
+                } else if model.selectedFolders.count > 1 {
+                    Text("Playlist aus \(model.selectedFolders.count) markierten Ordnern")
                 } else {
                     Text("Kein Ordner markiert: Der aktuelle Ordner wird verwendet.")
                 }
