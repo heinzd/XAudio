@@ -5,6 +5,7 @@ struct ContentView: View {
     @Bindable var model: AudioLibraryModel
     @State private var showsFolderImporter = false
     @State private var playlistPresentation: PlaylistPresentation?
+    @State private var playlistSourcesSnapshot: [URL] = []
 
     var body: some View {
         NavigationStack {
@@ -43,7 +44,11 @@ struct ContentView: View {
                 }
             }
             .fullScreenCover(item: $playlistPresentation) { presentation in
-                PlaylistView(model: model, presentation: presentation)
+                PlaylistView(
+                    model: model,
+                    presentation: presentation,
+                    folderSources: playlistSourcesSnapshot
+                )
             }
             .alert("Fehler", isPresented: Binding(
                 get: { model.errorMessage != nil },
@@ -122,6 +127,11 @@ struct ContentView: View {
             }
 
             Button {
+                playlistSourcesSnapshot = model.selectedFolders.isEmpty
+                    ? model.currentFolder.map { [$0] } ?? []
+                    : model.selectedFolders.sorted {
+                        $0.path.localizedStandardCompare($1.path) == .orderedAscending
+                    }
                 playlistPresentation = .folders
             } label: {
                 Label("Abspielliste erstellen", systemImage: "music.note.list")
@@ -143,6 +153,7 @@ private struct PlaylistView: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var model: AudioLibraryModel
     let presentation: PlaylistPresentation
+    let folderSources: [URL]
 
     var body: some View {
         GeometryReader { geometry in
@@ -156,7 +167,7 @@ private struct PlaylistView: View {
             if presentation == .favorites {
                 model.openFavorites()
             } else {
-                model.openSelectedPlaylist()
+                model.openSelectedPlaylist(from: folderSources)
             }
         }
         .onDisappear {
