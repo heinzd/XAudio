@@ -98,6 +98,11 @@ struct ContentView: View {
                                 ? "checkmark.circle.fill"
                                 : "circle")
                                 .font(.title3)
+                                .foregroundStyle(
+                                    model.selectedFolders.contains(folder)
+                                        ? Color.blue
+                                        : Color.secondary
+                                )
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("Ordner markieren")
@@ -153,6 +158,9 @@ private struct PlaylistView: View {
             } else {
                 model.openSelectedPlaylist()
             }
+        }
+        .onDisappear {
+            model.stopPlayback()
         }
     }
 
@@ -216,20 +224,41 @@ private struct PlaylistView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Zurück", systemImage: "chevron.left") { dismiss() }
+                    Button("Zurück", systemImage: "chevron.left") {
+                        model.stopPlayback()
+                        dismiss()
+                    }
                 }
                 ToolbarItem(placement: .principal) {
-                    Picker("Wiedergabe", selection: Binding(
-                        get: { model.playbackOrder },
-                        set: { model.changeOrder(to: $0) }
-                    )) {
-                        ForEach(PlaybackOrder.allCases) { order in
-                            Image(systemName: order.symbol)
-                                .tag(order)
+                    HStack(spacing: 10) {
+                        Picker("Wiedergabe", selection: Binding(
+                            get: { model.playbackOrder },
+                            set: { model.changeOrder(to: $0) }
+                        )) {
+                            ForEach(PlaybackOrder.allCases) { order in
+                                Image(systemName: order.symbol)
+                                    .tag(order)
+                            }
                         }
+                        .pickerStyle(.segmented)
+                        .tint(.blue)
+                        .frame(width: 120)
+
+                        Button {
+                            model.repeatsPlaylist.toggle()
+                        } label: {
+                            Image(systemName: "repeat")
+                                .foregroundStyle(
+                                    model.repeatsPlaylist ? Color.blue : Color.secondary
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(
+                            model.repeatsPlaylist
+                                ? "Endloswiedergabe ausschalten"
+                                : "Endloswiedergabe einschalten"
+                        )
                     }
-                    .pickerStyle(.segmented)
-                    .frame(width: 120)
                 }
             }
             .safeAreaInset(edge: .bottom) {
