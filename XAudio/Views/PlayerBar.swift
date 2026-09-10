@@ -7,7 +7,9 @@ struct ArtworkView: View {
     var body: some View {
         Group {
             if let data, let image = UIImage(data: data) {
-                Image(uiImage: image).resizable().scaledToFill()
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
             } else {
                 Image(systemName: "book.closed.fill")
                     .resizable().scaledToFit().padding(size * 0.22)
@@ -16,6 +18,7 @@ struct ArtworkView: View {
             }
         }
         .frame(width: size, height: size)
+        .background(.quaternary)
         .clipShape(RoundedRectangle(cornerRadius: size * 0.12))
     }
 }
