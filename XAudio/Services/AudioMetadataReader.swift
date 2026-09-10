@@ -104,7 +104,7 @@ enum AudioMetadataReader {
     private static func structuredCoverBaseName(
         for folderName: String
     ) -> String? {
-        let pattern = #"^(\\d+)\\.\\s+(.+?)\\s+-\\s+(.+?)\\s+\\[(\\d{4})\\]$"#
+        let pattern = #"^(\d+)\.\s+(.+?)\s+-\s+(.+?)\s+\[(\d{4})\]$"#
         guard let expression = try? NSRegularExpression(pattern: pattern) else {
             return nil
         }
