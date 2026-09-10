@@ -59,7 +59,10 @@ enum AudioMetadataReader {
 
     private static func folderArtworkData(beside audioURL: URL) -> Data? {
         let folder = audioURL.deletingLastPathComponent()
-        let supportedExtensions = ["jpg", "jpeg", "png", "heic", "heif", "webp"]
+        let supportedExtensions = [
+            "jpg", "jpeg", "png", "heic", "heif",
+            "webp", "tif", "tiff", "bmp", "gif"
+        ]
 
         guard let files = try? FileManager.default.contentsOfDirectory(
             at: folder,
@@ -67,21 +70,56 @@ enum AudioMetadataReader {
             options: [.skipsHiddenFiles]
         ) else { return nil }
 
-        let coverURL = files
-            .filter {
-                $0.deletingPathExtension().lastPathComponent
-                    .caseInsensitiveCompare("cover") == .orderedSame
-            }
+        let imageFiles = files
             .filter { supportedExtensions.contains($0.pathExtension.lowercased()) }
             .sorted {
-                let left = supportedExtensions.firstIndex(of: $0.pathExtension.lowercased()) ?? .max
-                let right = supportedExtensions.firstIndex(of: $1.pathExtension.lowercased()) ?? .max
+                let left = supportedExtensions.firstIndex(
+                    of: $0.pathExtension.lowercased()
+                ) ?? .max
+                let right = supportedExtensions.firstIndex(
+                    of: $1.pathExtension.lowercased()
+                ) ?? .max
                 return left < right
             }
-            .first
 
-        guard let coverURL else { return nil }
-        return try? Data(contentsOf: coverURL)
+        if let genericCover = imageFiles.first(where: {
+            $0.deletingPathExtension().lastPathComponent
+                .caseInsensitiveCompare("cover") == .orderedSame
+        }) {
+            return try? Data(contentsOf: genericCover)
+        }
+
+        guard let expectedName = structuredCoverBaseName(
+            for: folder.lastPathComponent
+        ) else { return nil }
+
+        guard let structuredCover = imageFiles.first(where: {
+            $0.deletingPathExtension().lastPathComponent
+                .caseInsensitiveCompare(expectedName) == .orderedSame
+        }) else { return nil }
+
+        return try? Data(contentsOf: structuredCover)
+    }
+
+    private static func structuredCoverBaseName(
+        for folderName: String
+    ) -> String? {
+        let pattern = #"^(\\d+)\\.\\s+(.+?)\\s+-\\s+(.+?)\\s+\\[(\\d{4})\\]$"#
+        guard let expression = try? NSRegularExpression(pattern: pattern) else {
+            return nil
+        }
+
+        let source = folderName as NSString
+        let range = NSRange(location: 0, length: source.length)
+        guard
+            let match = expression.firstMatch(in: folderName, range: range),
+            match.range == range
+        else { return nil }
+
+        let number = source.substring(with: match.range(at: 1))
+        let title = source.substring(with: match.range(at: 2))
+        let album = source.substring(with: match.range(at: 3))
+        return "\(number). \(title) - \(album)"
     }
 }
 
