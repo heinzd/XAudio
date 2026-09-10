@@ -168,7 +168,9 @@ final class AudioLibraryModel {
 
     func stopPlayback() {
         player.pause()
+        player.replaceCurrentItem(with: nil)
         isPlaying = false
+        elapsed = 0
         updateNowPlayingInfo()
     }
 
