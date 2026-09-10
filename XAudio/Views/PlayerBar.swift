@@ -54,6 +54,14 @@ struct PlayerBar: View {
                     ArtworkView(data: track.artworkData, size: 56)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(track.title).font(.headline).lineLimit(2)
+                        let albumAndYear = [track.album, track.year]
+                            .compactMap { $0 }
+                            .joined(separator: " · ")
+                        if !albumAndYear.isEmpty {
+                            Text(albumAndYear)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                         Text(positionText).font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
@@ -141,8 +149,11 @@ struct LandscapePlayerView: View {
                                     .lineLimit(1)
                             }
 
-                            if let album = track.album {
-                                Text(album)
+                            let albumAndYear = [track.album, track.year]
+                                .compactMap { $0 }
+                                .joined(separator: " · ")
+                            if !albumAndYear.isEmpty {
+                                Text(albumAndYear)
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)
