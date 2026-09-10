@@ -135,7 +135,6 @@ final class AudioLibraryModel {
 
     func openSelectedPlaylist() {
         playbackOrder = .sequential
-        repeatsPlaylist = false
         playlistIsFavorites = false
         let sources = playlistSources
         let signature = sources
@@ -152,7 +151,6 @@ final class AudioLibraryModel {
 
     func openFavorites() {
         playbackOrder = .sequential
-        repeatsPlaylist = false
         playlistIsFavorites = true
         loadFavorites()
         let signature = "favorites\n" + favoritePaths.sorted().joined(separator: "\n")
@@ -332,7 +330,7 @@ final class AudioLibraryModel {
     func next() {
         guard currentIndex != nil else { return }
         if let targetIndex = adjacentPlaylistIndex(offset: 1) {
-                       play(at: targetIndex, scrollToTrack: true)
+            play(at: targetIndex, scrollToTrack: true)
         } else if repeatsPlaylist,
                   let firstURL = playbackSequence.first,
                   let firstIndex = playlist.firstIndex(where: { $0.url == firstURL }) {
