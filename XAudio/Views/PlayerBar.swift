@@ -50,8 +50,37 @@ struct PlayerBar: View {
         if let track = model.currentTrack {
             VStack(spacing: 8) {
                 HStack(spacing: 12) {
-                    Spacer()
+                    ArtworkView(data: track.artworkData, size: 56)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(track.title)
+                            .font(.headline)
+                            .lineLimit(2)
 
+                        let albumAndYear = [track.album, track.year]
+                            .compactMap { $0 }
+                            .joined(separator: " · ")
+                        if !albumAndYear.isEmpty {
+                            Text(albumAndYear)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Text(positionText)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                }
+
+                Slider(
+                    value: Binding(
+                        get: { model.elapsed },
+                        set: { model.seek(to: $0) }
+                    ),
+                    in: 0...max(track.duration, 1)
+                )
+
+                HStack(spacing: 14) {
                     Button {
                         model.saveCurrentPositionManually()
                     } label: {
@@ -66,29 +95,19 @@ struct PlayerBar: View {
                         Image(systemName: "play.rectangle.fill")
                     }
                     .foregroundStyle(
-                        !model.hasSavedPositionForCurrentTrack ? Color.gray : Color.blue
+                        model.hasSavedPositionForCurrentTrack
+                            ? Color.blue
+                            : Color.gray
                     )
                     .disabled(!model.hasSavedPositionForCurrentTrack)
                     .accessibilityLabel("Zur gespeicherten Position springen")
-                }
-                .font(.title3)
 
-                HStack(spacing: 12) {
-                    ArtworkView(data: track.artworkData, size: 56)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(track.title).font(.headline).lineLimit(2)
-                        let albumAndYear = [track.album, track.year]
-                            .compactMap { $0 }
-                            .joined(separator: " · ")
-                        if !albumAndYear.isEmpty {
-                            Text(albumAndYear)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Text(positionText).font(.caption).foregroundStyle(.secondary)
-                    }
                     Spacer()
+
                     FavoriteButton(model: model, track: track)
+
+                    Spacer()
+
                     Button(action: model.previous) {
                         Image(systemName: "backward.fill")
                     }
@@ -100,12 +119,7 @@ struct PlayerBar: View {
                         Image(systemName: "forward.fill")
                     }
                 }
-
-                Slider(
-                    value: Binding(get: { model.elapsed }, set: { model.seek(to: $0) }),
-                    in: 0...max(track.duration, 1)
-                )
-
+                .font(.title3)
             }
             .padding()
             .background(.regularMaterial)
@@ -115,7 +129,8 @@ struct PlayerBar: View {
     private var positionText: String {
         guard let index = model.currentIndex else { return "" }
         return "\(index + 1) von \(model.playlist.count)"
-    }}
+    }
+}
 
 
 
