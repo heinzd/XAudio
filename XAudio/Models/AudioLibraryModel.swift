@@ -171,6 +171,14 @@ final class AudioLibraryModel {
         player.replaceCurrentItem(with: nil)
         isPlaying = false
         elapsed = 0
+
+        playlist.removeAll()
+        playbackSequence.removeAll()
+        currentIndex = nil
+        navigationScrollRequest = nil
+        playlistSourceSignature = ""
+        playlistIsFavorites = false
+
         updateNowPlayingInfo()
     }
 
