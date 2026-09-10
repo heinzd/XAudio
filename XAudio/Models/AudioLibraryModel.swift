@@ -28,6 +28,7 @@ final class AudioLibraryModel {
     var navigationScrollRequest: URL?
     var favoritePaths: Set<String> = []
     var playlistIsFavorites = false
+    var repeatsPlaylist = false
 
     @ObservationIgnored private let player = AVPlayer()
     @ObservationIgnored private var timeObserver: Any?
@@ -134,8 +135,10 @@ final class AudioLibraryModel {
 
     func openSelectedPlaylist() {
         playbackOrder = .sequential
+        repeatsPlaylist = false
         playlistIsFavorites = false
-        let signature = playlistSources
+        let sources = playlistSources
+        let signature = sources
             .map(\.standardizedFileURL.path)
             .sorted()
             .joined(separator: "\n")
@@ -144,11 +147,12 @@ final class AudioLibraryModel {
             return
         }
         playlistSourceSignature = signature
-        buildPlaylist()
+        buildPlaylist(from: sources)
     }
 
     func openFavorites() {
         playbackOrder = .sequential
+        repeatsPlaylist = false
         playlistIsFavorites = true
         loadFavorites()
         let signature = "favorites\n" + favoritePaths.sorted().joined(separator: "\n")
@@ -164,8 +168,18 @@ final class AudioLibraryModel {
         buildPlaylist(explicitURLs: urls)
     }
 
-    private func buildPlaylist(explicitURLs: [URL]? = nil) {
-        let sources = playlistSources
+    func stopPlayback() {
+        player.pause()
+        player.replaceCurrentItem(with: nil)
+        isPlaying = false
+        elapsed = 0
+        updateNowPlayingInfo()
+    }
+
+    private func buildPlaylist(
+        from sources: [URL] = [],
+        explicitURLs: [URL]? = nil
+    ) {
         guard explicitURLs != nil || !sources.isEmpty else { return }
         isBuildingPlaylist = true
         errorMessage = nil
@@ -316,9 +330,13 @@ final class AudioLibraryModel {
     }
 
     func next() {
-        guard let currentIndex else { return }
+        guard currentIndex != nil else { return }
         if let targetIndex = adjacentPlaylistIndex(offset: 1) {
-            play(at: targetIndex, scrollToTrack: true)
+                       play(at: targetIndex, scrollToTrack: true)
+        } else if repeatsPlaylist,
+                  let firstURL = playbackSequence.first,
+                  let firstIndex = playlist.firstIndex(where: { $0.url == firstURL }) {
+            play(at: firstIndex, scrollToTrack: true)
         } else {
             player.pause()
             isPlaying = false
