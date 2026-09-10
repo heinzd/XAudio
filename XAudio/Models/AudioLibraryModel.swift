@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import MediaPlayer
 import Observation
 import UIKit
 
@@ -24,14 +25,18 @@ final class AudioLibraryModel {
     @ObservationIgnored private var endObserver: NSObjectProtocol?
     @ObservationIgnored private var accessedRoot: URL?
     @ObservationIgnored private var playbackSequence: [URL] = []
+    @ObservationIgnored private var lastNowPlayingUpdateSecond = -1
     private var savedPositions: [String: TimeInterval] = [:]
 
     private static let positionsDefaultsKey = "playbackPositions.json"
+    private static let rootBookmarkDefaultsKey = "audioRootFolder.bookmark"
 
     init() {
         savedPositions = Self.loadSavedPositions()
         allowAutomaticScreenLock()
         configureAudioSession()
+        configureRemoteCommands()
+        restoreRootFolder()
         timeObserver = player.addPeriodicTimeObserver(
             forInterval: CMTime(seconds: 0.5, preferredTimescale: 600),
             queue: .main
@@ -61,6 +66,7 @@ final class AudioLibraryModel {
         _ = url.startAccessingSecurityScopedResource()
         accessedRoot = url
         rootFolder = url
+        persistRootBookmark(url)
         loadPositionsFromRootFolder()
         currentFolder = url
         selectedFolder = nil
@@ -123,6 +129,7 @@ final class AudioLibraryModel {
             elapsed = 0
             isPlaying = false
             player.replaceCurrentItem(with: nil)
+            updateNowPlayingInfo()
             isBuildingPlaylist = false
         }
     }
@@ -145,6 +152,7 @@ final class AudioLibraryModel {
             player.play()
         }
         isPlaying.toggle()
+        updateNowPlayingInfo()
     }
 
     func play(
@@ -165,6 +173,7 @@ final class AudioLibraryModel {
         }
         player.play()
         isPlaying = true
+        updateNowPlayingInfo()
 
         if scrollToTrack {
             navigationScrollRequest = track.id
@@ -200,6 +209,7 @@ final class AudioLibraryModel {
         if elapsed > 5 {
             player.seek(to: .zero)
             elapsed = 0
+            updateNowPlayingInfo()
         } else if let targetIndex = adjacentPlaylistIndex(offset: -1) {
             play(at: targetIndex, scrollToTrack: true)
         }
@@ -212,12 +222,14 @@ final class AudioLibraryModel {
         } else {
             player.pause()
             isPlaying = false
+            updateNowPlayingInfo()
         }
     }
 
     func seek(to seconds: TimeInterval) {
         player.seek(to: CMTime(seconds: seconds, preferredTimescale: 600))
         elapsed = seconds
+        updateNowPlayingInfo()
     }
 
     private func rebuildPlaybackSequence() {
@@ -242,6 +254,12 @@ final class AudioLibraryModel {
     private func updatePlaybackTime(_ seconds: TimeInterval) {
         guard seconds.isFinite else { return }
         elapsed = seconds
+
+        let wholeSecond = Int(seconds)
+        if wholeSecond / 5 != lastNowPlayingUpdateSecond / 5 {
+            lastNowPlayingUpdateSecond = wholeSecond
+            updateNowPlayingInfo()
+        }
     }
 
     private func trackDidFinish() {
@@ -342,6 +360,137 @@ final class AudioLibraryModel {
         return enumerator.compactMap { $0 as? URL }
             .filter { $0.pathExtension.lowercased() == "mp3" }
             .sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
+    }
+
+    private func persistRootBookmark(_ url: URL) {
+        do {
+            let data = try url.bookmarkData(
+                options: .minimalBookmark,
+                includingResourceValuesForKeys: nil,
+                relativeTo: nil
+            )
+            UserDefaults.standard.set(data, forKey: Self.rootBookmarkDefaultsKey)
+        } catch {
+            errorMessage = "Der Stammordner konnte nicht dauerhaft gespeichert werden: \(error.localizedDescription)"
+        }
+    }
+
+    private func restoreRootFolder() {
+        guard let data = UserDefaults.standard.data(forKey: Self.rootBookmarkDefaultsKey) else {
+            return
+        }
+
+        do {
+            var isStale = false
+            let url = try URL(
+                resolvingBookmarkData: data,
+                options: .withoutUI,
+                relativeTo: nil,
+                bookmarkDataIsStale: &isStale
+            )
+            openRoot(url)
+            if isStale {
+                persistRootBookmark(url)
+            }
+        } catch {
+            UserDefaults.standard.removeObject(forKey: Self.rootBookmarkDefaultsKey)
+        }
+    }
+
+    private func configureRemoteCommands() {
+        let commands = MPRemoteCommandCenter.shared()
+
+        commands.playCommand.isEnabled = true
+        commands.playCommand.addTarget { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.playFromRemoteCommand()
+            }
+            return .success
+        }
+
+        commands.pauseCommand.isEnabled = true
+        commands.pauseCommand.addTarget { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.pauseFromRemoteCommand()
+            }
+            return .success
+        }
+
+        commands.togglePlayPauseCommand.isEnabled = true
+        commands.togglePlayPauseCommand.addTarget { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.playPause()
+            }
+            return .success
+        }
+
+        commands.previousTrackCommand.isEnabled = true
+        commands.previousTrackCommand.addTarget { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.previous()
+            }
+            return .success
+        }
+
+        commands.nextTrackCommand.isEnabled = true
+        commands.nextTrackCommand.addTarget { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.next()
+            }
+            return .success
+        }
+
+        commands.changePlaybackPositionCommand.isEnabled = true
+        commands.changePlaybackPositionCommand.addTarget { [weak self] event in
+            guard let event = event as? MPChangePlaybackPositionCommandEvent else {
+                return .commandFailed
+            }
+            let position = event.positionTime
+            Task { @MainActor [weak self] in
+                self?.seek(to: position)
+            }
+            return .success
+        }
+    }
+
+    private func playFromRemoteCommand() {
+        guard !isPlaying else { return }
+        playPause()
+    }
+
+    private func pauseFromRemoteCommand() {
+        guard isPlaying else { return }
+        player.pause()
+        isPlaying = false
+        updateNowPlayingInfo()
+    }
+
+    private func updateNowPlayingInfo() {
+        guard let track = currentTrack else {
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+            return
+        }
+
+        var info: [String: Any] = [
+            MPMediaItemPropertyTitle: track.title,
+            MPMediaItemPropertyPlaybackDuration: track.duration,
+            MPNowPlayingInfoPropertyElapsedPlaybackTime: elapsed,
+            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? 1.0 : 0.0
+        ]
+
+        if let artist = track.artist {
+            info[MPMediaItemPropertyArtist] = artist
+        }
+        if let album = track.album {
+            info[MPMediaItemPropertyAlbumTitle] = album
+        }
+        if let artworkData = track.artworkData, let image = UIImage(data: artworkData) {
+            info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(
+                boundsSize: image.size
+            ) { _ in image }
+        }
+
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
     }
 
     private func allowAutomaticScreenLock() {
