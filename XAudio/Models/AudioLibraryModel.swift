@@ -4,6 +4,13 @@ import MediaPlayer
 import Observation
 import UIKit
 
+private enum NowPlayingArtworkFactory {
+    nonisolated static func makeArtwork(from data: Data) -> MPMediaItemArtwork? {
+        guard let image = UIImage(data: data) else { return nil }
+        return MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+    }
+}
+
 @MainActor
 @Observable
 final class AudioLibraryModel {
@@ -483,10 +490,11 @@ final class AudioLibraryModel {
         if let album = track.album {
             info[MPMediaItemPropertyAlbumTitle] = album
         }
-        if let artworkData = track.artworkData, let image = UIImage(data: artworkData) {
-            info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(
-                boundsSize: image.size
-            ) { _ in image }
+        if
+            let artworkData = track.artworkData,
+            let artwork = NowPlayingArtworkFactory.makeArtwork(from: artworkData)
+        {
+            info[MPMediaItemPropertyArtwork] = artwork
         }
 
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
