@@ -124,7 +124,7 @@ struct ContentView: View {
             Button {
                 playlistPresentation = .folders
             } label: {
-                Label("Abspielliste öffnen", systemImage: "music.note.list")
+                Label("Abspielliste erstellen", systemImage: "music.note.list")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
