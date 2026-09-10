@@ -27,7 +27,7 @@ enum PlaybackOrder: String, CaseIterable, Identifiable, Sendable {
 
     var symbol: String {
         switch self {
-        case .sequential: "arrow.right"
+        case .sequential: "list.bullet"
         case .shuffled: "shuffle"
         }
     }
