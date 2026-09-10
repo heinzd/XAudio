@@ -26,6 +26,8 @@ final class AudioLibraryModel {
     var elapsed: TimeInterval = 0
     var errorMessage: String?
     var navigationScrollRequest: URL?
+    var favoritePaths: Set<String> = []
+    var playlistIsFavorites = false
 
     @ObservationIgnored private let player = AVPlayer()
     @ObservationIgnored private var timeObserver: Any?
@@ -33,6 +35,7 @@ final class AudioLibraryModel {
     @ObservationIgnored private var accessedRoot: URL?
     @ObservationIgnored private var playbackSequence: [URL] = []
     @ObservationIgnored private var lastNowPlayingUpdateSecond = -1
+    @ObservationIgnored private var playlistSourceSignature = ""
     private var savedPositions: [String: TimeInterval] = [:]
 
     private static let positionsDefaultsKey = "playbackPositions.json"
@@ -82,6 +85,8 @@ final class AudioLibraryModel {
         rootFolder = url
         persistRootBookmark(url)
         loadPositionsFromRootFolder()
+        loadFavorites()
+        playlistSourceSignature = ""
         currentFolder = url
         selectedFolders.removeAll()
         refreshFolders()
@@ -105,6 +110,7 @@ final class AudioLibraryModel {
         } else {
             selectedFolders.insert(url)
         }
+        playlistSourceSignature = ""
     }
 
     func refreshFolders() {
@@ -126,14 +132,51 @@ final class AudioLibraryModel {
         }
     }
 
-    func buildPlaylist() {
+    func openSelectedPlaylist() {
+        playbackOrder = .sequential
+        playlistIsFavorites = false
+        let signature = playlistSources
+            .map(\.standardizedFileURL.path)
+            .sorted()
+            .joined(separator: "\n")
+        guard signature != playlistSourceSignature || playlist.isEmpty else {
+            rebuildPlaybackSequence()
+            return
+        }
+        playlistSourceSignature = signature
+        buildPlaylist()
+    }
+
+    func openFavorites() {
+        playbackOrder = .sequential
+        playlistIsFavorites = true
+        loadFavorites()
+        let signature = "favorites\n" + favoritePaths.sorted().joined(separator: "\n")
+        guard signature != playlistSourceSignature || playlist.isEmpty else {
+            rebuildPlaybackSequence()
+            return
+        }
+        playlistSourceSignature = signature
+        guard let rootFolder else { return }
+        let urls = favoritePaths.sorted()
+            .map { rootFolder.appendingPathComponent($0, isDirectory: false) }
+            .filter { FileManager.default.fileExists(atPath: $0.path) }
+        buildPlaylist(explicitURLs: urls)
+    }
+
+    private func buildPlaylist(explicitURLs: [URL]? = nil) {
         let sources = playlistSources
-        guard !sources.isEmpty else { return }
+        guard explicitURLs != nil || !sources.isEmpty else { return }
         isBuildingPlaylist = true
         errorMessage = nil
 
         Task { @MainActor in
             let urls = await Task.detached(priority: .userInitiated) {
+                if let explicitURLs {
+                    return explicitURLs.sorted {
+                        $0.path.localizedStandardCompare($1.path) == .orderedAscending
+                    }
+                }
                 let allURLs = sources.flatMap { Self.mp3Files(recursivelyBelow: $0) }
                 return Array(Set(allURLs)).sorted {
                     $0.path.localizedStandardCompare($1.path) == .orderedAscending
@@ -152,6 +195,35 @@ final class AudioLibraryModel {
             player.replaceCurrentItem(with: nil)
             isBuildingPlaylist = false
         }
+    }
+
+    var favoriteCount: Int { favoritePaths.count }
+
+    func isFavorite(_ track: AudioTrack) -> Bool {
+        favoritePaths.contains(relativePath(for: track.url))
+    }
+
+    func toggleFavorite(_ track: AudioTrack) {
+        let path = relativePath(for: track.url)
+        if favoritePaths.contains(path) {
+            favoritePaths.remove(path)
+            if playlistIsFavorites {
+                let wasCurrent = currentTrack?.url == track.url
+                playlist.removeAll { $0.url == track.url }
+                if wasCurrent {
+                    player.pause()
+                    player.replaceCurrentItem(with: nil)
+                    isPlaying = false
+                    elapsed = 0
+                }
+                currentIndex = playlist.isEmpty ? nil : min(currentIndex ?? 0, playlist.count - 1)
+                playlistSourceSignature = "favorites\n" + favoritePaths.sorted().joined(separator: "\n")
+                rebuildPlaybackSequence()
+            }
+        } else {
+            favoritePaths.insert(path)
+        }
+        persistFavorites()
     }
 
     func changeOrder(to order: PlaybackOrder) {
@@ -324,6 +396,39 @@ final class AudioLibraryModel {
         else { return url.lastPathComponent }
 
         return fileComponents.dropFirst(rootComponents.count).joined(separator: "/")
+    }
+
+    private struct FavoritesFile: Codable {
+        let version: Int
+        let favorites: [String]
+    }
+
+    private var favoritesFileURL: URL? {
+        rootFolder?.appendingPathComponent(".xaudio-favorites.json", isDirectory: false)
+    }
+
+    private func loadFavorites() {
+        guard
+            let favoritesFileURL,
+            let data = try? Data(contentsOf: favoritesFileURL),
+            let file = try? JSONDecoder().decode(FavoritesFile.self, from: data)
+        else {
+            favoritePaths = []
+            return
+        }
+        favoritePaths = Set(file.favorites)
+    }
+
+    private func persistFavorites() {
+        guard let favoritesFileURL else { return }
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted]
+            let file = FavoritesFile(version: 1, favorites: favoritePaths.sorted())
+            try encoder.encode(file).write(to: favoritesFileURL, options: .atomic)
+        } catch {
+            errorMessage = "Favoriten konnten nicht gespeichert werden: \(error.localizedDescription)"
+        }
     }
 
     private var positionsFileURL: URL? {
