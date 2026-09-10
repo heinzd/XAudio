@@ -37,6 +37,8 @@ final class AudioLibraryModel {
     @ObservationIgnored private var playbackSequence: [URL] = []
     @ObservationIgnored private var lastNowPlayingUpdateSecond = -1
     @ObservationIgnored private var playlistSourceSignature = ""
+    @ObservationIgnored private var playlistBuildTask: Task<Void, Never>?
+    @ObservationIgnored private var playlistBuildGeneration = 0
     private var savedPositions: [String: TimeInterval] = [:]
 
     private static let positionsDefaultsKey = "playbackPositions.json"
@@ -167,6 +169,11 @@ final class AudioLibraryModel {
     }
 
     func stopPlayback() {
+        playlistBuildTask?.cancel()
+        playlistBuildTask = nil
+        playlistBuildGeneration += 1
+        isBuildingPlaylist = false
+
         player.pause()
         player.replaceCurrentItem(with: nil)
         isPlaying = false
@@ -187,10 +194,14 @@ final class AudioLibraryModel {
         explicitURLs: [URL]? = nil
     ) {
         guard explicitURLs != nil || !sources.isEmpty else { return }
+        playlistBuildTask?.cancel()
+        playlistBuildGeneration += 1
+        let generation = playlistBuildGeneration
+
         isBuildingPlaylist = true
         errorMessage = nil
 
-        Task { @MainActor in
+        playlistBuildTask = Task { @MainActor in
             let urls = await Task.detached(priority: .userInitiated) {
                 if let explicitURLs {
                     return explicitURLs.sorted {
@@ -202,11 +213,18 @@ final class AudioLibraryModel {
                     $0.path.localizedStandardCompare($1.path) == .orderedAscending
                 }
             }.value
+
+            guard !Task.isCancelled, generation == playlistBuildGeneration else { return }
+
             var tracks: [AudioTrack] = []
             tracks.reserveCapacity(urls.count)
             for url in urls {
+                guard !Task.isCancelled, generation == playlistBuildGeneration else { return }
                 tracks.append(await AudioMetadataReader.track(at: url))
             }
+
+            guard !Task.isCancelled, generation == playlistBuildGeneration else { return }
+
             playlist = tracks
             rebuildPlaybackSequence()
             currentIndex = tracks.isEmpty ? nil : 0
@@ -214,6 +232,7 @@ final class AudioLibraryModel {
             isPlaying = false
             player.replaceCurrentItem(with: nil)
             isBuildingPlaylist = false
+            playlistBuildTask = nil
         }
     }
 
