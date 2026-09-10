@@ -135,10 +135,9 @@ final class AudioLibraryModel {
         }
     }
 
-    func openSelectedPlaylist() {
+    func openSelectedPlaylist(from sources: [URL]) {
         playbackOrder = .sequential
         playlistIsFavorites = false
-        let sources = playlistSources
         let signature = sources
             .map(\.standardizedFileURL.path)
             .sorted()
