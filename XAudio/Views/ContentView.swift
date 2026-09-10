@@ -141,7 +141,17 @@ struct ContentView: View {
                             VStack(alignment: .leading) {
                                 Text(track.title).lineLimit(2)
                                 if let artist = track.artist {
-                                    Text(artist).font(.caption).foregroundStyle(.secondary)
+                                    Text(artist)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                let albumAndYear = [track.album, track.year]
+                                    .compactMap { $0 }
+                                    .joined(separator: " · ")
+                                if !albumAndYear.isEmpty {
+                                    Text(albumAndYear)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
                                 }
                             }
                             Spacer()
