@@ -114,7 +114,7 @@ final class AudioLibraryModel {
         isBuildingPlaylist = true
         errorMessage = nil
 
-        Task {
+        Task { @MainActor in
             let urls = await Task.detached(priority: .userInitiated) {
                 Self.mp3Files(recursivelyBelow: source)
             }.value
