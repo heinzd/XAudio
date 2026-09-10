@@ -4,16 +4,12 @@ import UniformTypeIdentifiers
 struct ContentView: View {
     @Bindable var model: AudioLibraryModel
     @State private var showsFolderImporter = false
+    @State private var playlistPresentation: PlaylistPresentation?
 
     var body: some View {
-        GeometryReader { geometry in
-            let isLandscape = geometry.size.width > geometry.size.height
-
-            NavigationStack {
-                Group {
-                    if isLandscape {
-                        LandscapePlayerView(model: model)
-                    } else if model.rootFolder == nil {
+        NavigationStack {
+            Group {
+                if model.rootFolder == nil {
                     ContentUnavailableView {
                         Label("Kein Hörbuchordner", systemImage: "folder.badge.plus")
                     } description: {
@@ -23,23 +19,15 @@ struct ContentView: View {
                             .buttonStyle(.borderedProminent)
                     }
                 } else {
-                    browser
+                    folderBrowser
                 }
             }
             .navigationTitle("XAudio")
             .toolbar {
-                if !isLandscape {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button("Stammordner", systemImage: "folder.badge.gearshape") {
-                            showsFolderImporter = true
-                        }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Stammordner", systemImage: "folder.badge.gearshape") {
+                        showsFolderImporter = true
                     }
-                }
-            }
-            .toolbar(isLandscape ? .hidden : .visible, for: .navigationBar)
-            .safeAreaInset(edge: .bottom) {
-                if !isLandscape, model.currentTrack != nil {
-                    PlayerBar(model: model)
                 }
             }
             .fileImporter(
@@ -54,6 +42,9 @@ struct ContentView: View {
                     model.errorMessage = error.localizedDescription
                 }
             }
+            .fullScreenCover(item: $playlistPresentation) { presentation in
+                PlaylistView(model: model, presentation: presentation)
+            }
             .alert("Fehler", isPresented: Binding(
                 get: { model.errorMessage != nil },
                 set: { if !$0 { model.errorMessage = nil } }
@@ -62,18 +53,30 @@ struct ContentView: View {
             } message: {
                 Text(model.errorMessage ?? "Unbekannter Fehler")
             }
-            }
         }
     }
 
-    private var browser: some View {
-        ScrollViewReader { proxy in
-            List {
+    private var folderBrowser: some View {
+        List {
+            Button {
+                playlistPresentation = .favorites
+            } label: {
+                HStack {
+                    Label("Favoriten", systemImage: "star.fill")
+                        .foregroundStyle(.primary)
+                    Spacer()
+                    Text("\(model.favoriteCount)")
+                        .foregroundStyle(.secondary)
+                    Image(systemName: "chevron.right")
+                        .font(.caption.bold())
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .tint(.yellow)
+
             Section {
                 if model.currentFolder != model.rootFolder {
-                    Button {
-                        model.goUp()
-                    } label: {
+                    Button(action: model.goUp) {
                         Label("Übergeordneter Ordner", systemImage: "arrow.up.left")
                     }
                 }
@@ -91,7 +94,9 @@ struct ContentView: View {
                         Button {
                             model.toggleSelection(folder)
                         } label: {
-                            Image(systemName: model.selectedFolders.contains(folder) ? "checkmark.circle.fill" : "circle")
+                            Image(systemName: model.selectedFolders.contains(folder)
+                                ? "checkmark.circle.fill"
+                                : "circle")
                                 .font(.title3)
                         }
                         .buttonStyle(.plain)
@@ -101,78 +106,137 @@ struct ContentView: View {
             } header: {
                 Text(model.currentFolder?.lastPathComponent ?? "Ordner")
             } footer: {
-                if model.selectedFolders.count == 1, let selected = model.selectedFolders.first {
-                    Text("Playlist aus: \(selected.lastPathComponent)")
+                if model.selectedFolders.count == 1,
+                   let selected = model.selectedFolders.first {
+                    Text("Abspielliste aus: \(selected.lastPathComponent)")
                 } else if model.selectedFolders.count > 1 {
-                    Text("Playlist aus \(model.selectedFolders.count) markierten Ordnern")
+                    Text("Abspielliste aus \(model.selectedFolders.count) markierten Ordnern")
                 } else {
                     Text("Kein Ordner markiert: Der aktuelle Ordner wird verwendet.")
                 }
             }
 
-            Section("Abspielliste") {
-                Picker("Wiedergabe", selection: Binding(
-                    get: { model.playbackOrder },
-                    set: { model.changeOrder(to: $0) }
-                )) {
-                    ForEach(PlaybackOrder.allCases) { order in
-                        Label(order.title, systemImage: order.symbol).tag(order)
-                    }
-                }
-                .pickerStyle(.segmented)
+            Button {
+                playlistPresentation = .folders
+            } label: {
+                Label("Abspielliste öffnen", systemImage: "music.note.list")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
+        }
+    }
+}
 
-                Button {
-                    model.buildPlaylist()
-                } label: {
+private enum PlaylistPresentation: String, Identifiable {
+    case folders
+    case favorites
+    var id: String { rawValue }
+}
+
+private struct PlaylistView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Bindable var model: AudioLibraryModel
+    let presentation: PlaylistPresentation
+
+    var body: some View {
+        GeometryReader { geometry in
+            if geometry.size.width > geometry.size.height {
+                LandscapePlayerView(model: model)
+            } else {
+                portraitView
+            }
+        }
+        .task(id: presentation.id) {
+            if presentation == .favorites {
+                model.openFavorites()
+            } else {
+                model.openSelectedPlaylist()
+            }
+        }
+    }
+
+    private var portraitView: some View {
+        NavigationStack {
+            ScrollViewReader { proxy in
+                Group {
                     if model.isBuildingPlaylist {
-                        Label("MP3-Dateien werden gelesen …", systemImage: "hourglass")
+                        ProgressView("MP3-Dateien werden gelesen …")
+                    } else if model.playlist.isEmpty {
+                        ContentUnavailableView(
+                            presentation == .favorites ? "Keine Favoriten" : "Keine MP3-Dateien",
+                            systemImage: presentation == .favorites ? "star" : "music.note.list"
+                        )
                     } else {
-                        Label("Abspielliste erstellen", systemImage: "text.badge.plus")
-                    }
-                }
-                .disabled(model.isBuildingPlaylist)
+                        List(Array(model.playlist.enumerated()), id: \.element.id) { index, track in
+                            HStack(spacing: 10) {
+                                Button {
+                                    model.play(at: index)
+                                } label: {
+                                    HStack(spacing: 10) {
+                                        ArtworkView(data: track.artworkData, size: 44)
+                                        VStack(alignment: .leading) {
+                                            Text(track.title).lineLimit(2)
+                                            if let artist = track.artist {
+                                                Text(artist)
+                                                    .font(.caption)
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                            let albumAndYear = [track.album, track.year]
+                                                .compactMap { $0 }
+                                                .joined(separator: " · ")
+                                            if !albumAndYear.isEmpty {
+                                                Text(albumAndYear)
+                                                    .font(.caption)
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                        }
+                                        Spacer()
+                                        if model.currentIndex == index {
+                                            Image(systemName: "speaker.wave.2.fill")
+                                                .foregroundStyle(.tint)
+                                        }
+                                    }
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
 
-                ForEach(Array(model.playlist.enumerated()), id: \.element.id) { index, track in
-                    Button {
-                        model.play(at: index)
-                    } label: {
-                        HStack {
-                            ArtworkView(data: track.artworkData, size: 44)
-                            VStack(alignment: .leading) {
-                                Text(track.title).lineLimit(2)
-                                if let artist = track.artist {
-                                    Text(artist)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                let albumAndYear = [track.album, track.year]
-                                    .compactMap { $0 }
-                                    .joined(separator: " · ")
-                                if !albumAndYear.isEmpty {
-                                    Text(albumAndYear)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
+                                FavoriteButton(model: model, track: track)
                             }
-                            Spacer()
-                            if model.currentIndex == index {
-                                Image(systemName: "speaker.wave.2.fill")
-                                    .foregroundStyle(.tint)
-                            }
+                            .id(track.id)
                         }
                     }
-                    .buttonStyle(.plain)
-                    .id(track.id)
+                }
+                .onChange(of: model.navigationScrollRequest) { _, trackID in
+                    guard let trackID else { return }
+                    withAnimation { proxy.scrollTo(trackID, anchor: .center) }
                 }
             }
+            .navigationTitle(presentation == .favorites ? "Favoriten" : "Abspielliste")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Zurück", systemImage: "chevron.left") { dismiss() }
+                }
+                ToolbarItem(placement: .principal) {
+                    Picker("Wiedergabe", selection: Binding(
+                        get: { model.playbackOrder },
+                        set: { model.changeOrder(to: $0) }
+                    )) {
+                        ForEach(PlaybackOrder.allCases) { order in
+                            Image(systemName: order.symbol)
+                                .tag(order)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 120)
+                }
             }
-            .onChange(of: model.navigationScrollRequest) { _, trackID in
-                guard let trackID else { return }
-                withAnimation {
-                    proxy.scrollTo(trackID, anchor: .center)
+            .safeAreaInset(edge: .bottom) {
+                if model.currentTrack != nil {
+                    PlayerBar(model: model)
                 }
             }
         }
     }
 }
-
