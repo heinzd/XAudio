@@ -501,8 +501,11 @@ final class AudioLibraryModel {
         if let artist = track.artist {
             info[MPMediaItemPropertyArtist] = artist
         }
-        if let album = track.album {
-            info[MPMediaItemPropertyAlbumTitle] = album
+        let albumAndYear = [track.album, track.year]
+            .compactMap { $0 }
+            .joined(separator: " · ")
+        if !albumAndYear.isEmpty {
+            info[MPMediaItemPropertyAlbumTitle] = albumAndYear
         }
         if
             let artworkData = track.artworkData,
