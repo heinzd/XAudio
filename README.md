@@ -1,6 +1,6 @@
 # XAudio
 
-XAudio is a SwiftUI audiobook player for MP3 collections stored in the iOS Files app.
+XAudio is a SwiftUI MP3 player for collections stored in the iOS File System.
 
 ## Initial feature set
 
